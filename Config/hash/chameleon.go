@@ -1,4 +1,4 @@
-package chameleon
+package hash
 
 import (
 	"crypto/rand"
