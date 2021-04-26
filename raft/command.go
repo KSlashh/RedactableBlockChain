@@ -15,25 +15,17 @@ import (
 type ModifyCommand struct {
 	BlockHeight  int `json:"block-height"`
 	TxId     int `json:"tx-id"`
-	Payload []byte `json:"payload"`
-	Proof   []byte `json:"proof"`
-	P   []byte `json:"p"`
-	Q   []byte `json:"q"`
-	G   []byte `json:"g"`
-	Hk  []byte `json:"hk"`
+	NewTx    data.Tx `json:"new_tx"`
+	ChameleonParameter    [][]byte  `json:"chameleon_parameter"`
 }
 
 // Creates a new Modify command.
-func NewModifyCommand(block,tx int, payload,proof,p,q,g,hk []byte) *ModifyCommand {
+func NewModifyCommand(block,txId int, newtx data.Tx, para [][]byte) *ModifyCommand {
 	return &ModifyCommand{
 		BlockHeight:  block,
-		TxId:  tx,
-		Payload: payload,
-		Proof: proof,
-		P:   p,
-		Q:   q,
-		G:   g,
-		Hk:  hk,
+		TxId:  txId,
+		NewTx: newtx,
+		ChameleonParameter: para,
 	}
 }
 
@@ -45,7 +37,8 @@ func (c *ModifyCommand) CommandName() string {
 // Modify a transaction.
 func (c *ModifyCommand) Apply(server raft.Server) (interface{}, error) {
 
-	flag,err := data.CompareGolbalChameleonParameterWithLocal(c.P,c.Q,c.G)
+	para := c.ChameleonParameter
+	flag,err := data.CompareGolbalChameleonParameterWithLocal(para)
 	if err != nil {
 		return nil,err
 	}
@@ -59,16 +52,13 @@ func (c *ModifyCommand) Apply(server raft.Server) (interface{}, error) {
 		return nil,err
 	}
 	old := block.Transactions(c.TxId)
-	new,err := data.NewBasicTx(c.Payload,c.Proof,c.Hk,[][]byte{c.P,c.Q,c.G})
-	if err != nil {
-		return nil,err
-	}
+	new := c.NewTx
 
 	if !bytes.Equal(old.HashVal(),new.HashVal()) {
 		return nil,errors.New("new_tx and old_tx have different hash value")
 	}
 
-	if !new.Verify([][]byte{c.P,c.Q,c.G}) {
+	if !new.Verify(para) {
 		return nil,errors.New("invalid new transaction")
 	}
 
@@ -92,21 +82,17 @@ func (c *ModifyCommand) Apply(server raft.Server) (interface{}, error) {
 type AddTxCommand struct {
 	Payload []byte `json:"payload"`
 	Proof   []byte `json:"proof"`
-	P   []byte `json:"p"`
-	Q   []byte `json:"q"`
-	G   []byte `json:"g"`
 	Hk  []byte `json:"hk"`
+	ChameleonParameter  [][]byte  `json:"chameleon_parameter"`
 }
 
 // Creates a new tx command.
-func NewAddTxCommand(payload,proof,p,q,g,hk []byte) *AddTxCommand {
+func NewAddTxCommand(payload,proof,hk []byte, para [][]byte) *AddTxCommand {
 	return &AddTxCommand{
 		Payload: payload,
 		Proof: proof,
-		P: p,
-		Q: q,
-		G: g,
 		Hk: hk,
+		ChameleonParameter: para,
 	}
 }
 
@@ -118,7 +104,8 @@ func (c *AddTxCommand) CommandName() string {
 // Writes a tx to Txpool.
 func (c *AddTxCommand) Apply(server raft.Server) (interface{}, error) {
 
-	flag,err := data.CompareGolbalChameleonParameterWithLocal(c.P,c.Q,c.G)
+	para := c.ChameleonParameter
+	flag,err := data.CompareGolbalChameleonParameterWithLocal(para)
 	if err != nil {
 		return nil,err
 	}
@@ -126,7 +113,7 @@ func (c *AddTxCommand) Apply(server raft.Server) (interface{}, error) {
 		return nil,errors.New("global chameleon parameter in Modify request diff from local")
 	}
 
-	tx,err := data.NewBasicTx(c.Payload,c.Proof,c.Hk,[][]byte{c.P,c.Q,c.G})
+	tx,err := data.NewBasicTx(c.Payload,c.Proof,c.Hk,para)
 	if err != nil {
 		return nil,err
 	}
@@ -159,8 +146,9 @@ func (c *PackCommand) CommandName() string {
 
 //Pack some tx to a block.
 func (c *PackCommand) Apply(server raft.Server) (interface{}, error) {
+
 	para := c.BlockContent.HeadB.ChameleonParameter
-	flag,err := data.CompareGolbalChameleonParameterWithLocal(para[0], para[1], para[2])
+	flag,err := data.CompareGolbalChameleonParameterWithLocal(para)
 	if err != nil {
 		return nil,err
 	}

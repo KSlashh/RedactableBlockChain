@@ -104,13 +104,13 @@ func GetGolbalChameleonParameter() ([][]byte,[]byte,[]byte,error) {
 	return [][]byte{local.P,local.Q,local.G},local.Hk,local.Tk,nil
 }
 
-func CompareGolbalChameleonParameterWithLocal(p,q,g []byte) (bool,error) {
+func CompareGolbalChameleonParameterWithLocal(para [][]byte) (bool,error) {
 	local := &GolbalParameter{}
 	err := Load(local, path.GetConfigPath())
 	if err != nil {
 		return false,err
 	}
-	return (bytes.Equal(local.P,p) && bytes.Equal(local.Q,q) && bytes.Equal(local.G,g)),nil
+	return (bytes.Equal(local.P,para[0]) && bytes.Equal(local.Q,para[1]) && bytes.Equal(local.G,para[2])),nil
 }
 
 func GetCurrentBlockHeight() (int,error) {
