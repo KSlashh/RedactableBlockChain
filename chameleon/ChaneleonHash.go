@@ -11,7 +11,8 @@ func HashTest() {
 	// Generate the parameters.
 	var p, q, g, hk, tk, hash1, hash2, r1, s1, r2, s2, msg1, msg2 []byte
 
-	Keygen(128, &p, &q, &g, &hk, &tk)
+	ParameterGen(128, &p, &q, &g)
+	Keygen(128, p, q, g, &hk, &tk)
 
 	msg1 = []byte("YES")
 	msg2 = []byte("NO")
@@ -68,11 +69,9 @@ func Randgen(upperBoundHex *[]byte) []byte {
 	return []byte(fmt.Sprintf("%x", randomBig))
 }
 
-func Keygen(bits int, p *[]byte, q *[]byte, g *[]byte, hk *[]byte, tk *[]byte) {
+func ParameterGen(bits int, p *[]byte, q *[]byte, g *[]byte) {
 	gBig := new(big.Int)
 	qBig := new(big.Int)
-	hkBig := new(big.Int)
-	tkBig := new(big.Int)
 	oneBig := new(big.Int)
 	twoBig := new(big.Int)
 
@@ -93,17 +92,29 @@ func Keygen(bits int, p *[]byte, q *[]byte, g *[]byte, hk *[]byte, tk *[]byte) {
 
 	gBig.Exp(gBig, twoBig, pBig) // gBig = gBig ^ 2 % pBig
 
+	*p = []byte(fmt.Sprintf("%x", pBig))
+	*q = []byte(fmt.Sprintf("%x", qBig))
+	*g = []byte(fmt.Sprintf("%x", gBig))
+}
+
+func Keygen(bits int, p []byte, q []byte, g []byte, hk *[]byte, tk *[]byte) {
+	gBig := new(big.Int)
+	qBig := new(big.Int)
+	pBig := new(big.Int)
+	hkBig := new(big.Int)
+	tkBig := new(big.Int)
+	gBig.SetBytes(g)
+	pBig.SetBytes(p)
+	qBig.SetBytes(q)
+
 	// Choosing hk and tk
-	tkBig, err = rand.Int(rand.Reader, qBig)
+	tkBig, err := rand.Int(rand.Reader, qBig)
 	if err != nil {
 		fmt.Printf("Generation of random bigInt in bounds [0...%v] failed.", qBig)
 	}
 
 	hkBig.Exp(gBig, tkBig, pBig) // hkBig = gBig ^ tkBig % pBig
 
-	*p = []byte(fmt.Sprintf("%x", pBig))
-	*q = []byte(fmt.Sprintf("%x", qBig))
-	*g = []byte(fmt.Sprintf("%x", gBig))
 	*hk = []byte(fmt.Sprintf("%x", hkBig))
 	*tk = []byte(fmt.Sprintf("%x", tkBig))
 }
