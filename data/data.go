@@ -2,13 +2,13 @@ package data
 
 import (
 	"bytes"
-	"errors"
-	"strconv"
 	"crypto/sha256"
 	"encoding/json"
-	"os"
+	"errors"
 	ch "github.com/RedactableBlockChain/chameleon"
 	"github.com/RedactableBlockChain/path"
+	"os"
+	"strconv"
 )
 
 type Block interface {
@@ -45,14 +45,12 @@ type Tx interface {
 
 	// use new payload and proof to cover the original ones
 	// use private key to generate collision
-	Modify(Payload interface{},Proof interface{},PrivateKey interface{},ChameleonPara interface{}) error
+	Modify(Payload interface{}, Proof interface{}, PrivateKey interface{}, ChameleonPara interface{}) error
 }
-
-
 
 // Write to file system
 func Write(t interface{}, path string) error {
-	fw,err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0666)
+	fw, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
 		return err
 	}
@@ -69,7 +67,7 @@ func Write(t interface{}, path string) error {
 
 // Load from file system
 func Load(t interface{}, path string) error {
-	fr,err := os.Open(path)
+	fr, err := os.Open(path)
 	if err != nil {
 		return err
 	}
@@ -83,43 +81,42 @@ func Load(t interface{}, path string) error {
 	return nil
 }
 
-
-
 // Example Golbal Parameter
 type GolbalParameter struct {
-	CurHeght  int  `json:"cur_heght"`
-	P []byte   `json:"p"`
-	Q []byte   `json:"q"`
-	G []byte   `json:"g"`
-	Hk []byte  `json:"hk"`
-	Tk []byte  `json:"tk"`
+	CurHeght int    `json:"cur_heght"`
+	Bits     int    `json:"bit"`
+	P        []byte `json:"p"`
+	Q        []byte `json:"q"`
+	G        []byte `json:"g"`
+	Hk       []byte `json:"hk"`
+	Tk       []byte `json:"tk"`
 }
 
-func GetGolbalChameleonParameter() ([][]byte,[]byte,[]byte,error) {
+func GetGolbalChameleonParameter() ([][]byte, []byte, []byte, error) {
 	local := &GolbalParameter{}
 	err := Load(local, path.GetConfigPath())
 	if err != nil {
-		return nil,nil,nil,err
+		return nil, nil, nil, err
 	}
-	return [][]byte{local.P,local.Q,local.G},local.Hk,local.Tk,nil
+	return [][]byte{local.P, local.Q, local.G}, local.Hk, local.Tk, nil
 }
 
-func CompareGolbalChameleonParameterWithLocal(para [][]byte) (bool,error) {
+func CompareGolbalChameleonParameterWithLocal(para [][]byte) (bool, error) {
 	local := &GolbalParameter{}
 	err := Load(local, path.GetConfigPath())
 	if err != nil {
-		return false,err
+		return false, err
 	}
-	return (bytes.Equal(local.P,para[0]) && bytes.Equal(local.Q,para[1]) && bytes.Equal(local.G,para[2])),nil
+	return (bytes.Equal(local.P, para[0]) && bytes.Equal(local.Q, para[1]) && bytes.Equal(local.G, para[2])), nil
 }
 
-func GetCurrentBlockHeight() (int,error) {
+func GetCurrentBlockHeight() (int, error) {
 	local := &GolbalParameter{}
 	err := Load(local, path.GetConfigPath())
 	if err != nil {
-		return 0,err
+		return 0, err
 	}
-	return local.CurHeght,nil
+	return local.CurHeght, nil
 }
 
 func AddCurrentBlockHeight() error {
@@ -136,19 +133,18 @@ func AddCurrentBlockHeight() error {
 	return nil
 }
 
-
 // Example Tx Implementation
-type BasicTx struct{
-	PayloadB     []byte    `json:"payload"`
-	ProofB       []byte    `json:"proof"`
-	ChameleonPkB []byte    `json:"chameleon_public_key"`
-	CheckStringB [][]byte  `json:"check_string"`
-	HashValB     []byte    `json:"hash"`
+type BasicTx struct {
+	PayloadB     []byte   `json:"payload"`
+	ProofB       []byte   `json:"proof"`
+	ChameleonPkB []byte   `json:"chameleon_public_key"`
+	CheckStringB [][]byte `json:"check_string"`
+	HashValB     []byte   `json:"hash"`
 }
 
-func NewBasicTx(payload []byte,proof []byte,pk []byte,para [][]byte) (*BasicTx,error ){
+func NewBasicTx(payload []byte, proof []byte, pk []byte, para [][]byte) (*BasicTx, error) {
 	if len(para) != 3 {
-		return nil,errors.New("Invalid parameters,check your input!")
+		return nil, errors.New("Invalid parameters,check your input!")
 	}
 
 	p := para[0]
@@ -159,17 +155,17 @@ func NewBasicTx(payload []byte,proof []byte,pk []byte,para [][]byte) (*BasicTx,e
 	var hashout []byte
 	ch.ChameleonHash(&pk, &p, &q, &g, &payload, &r, &s, &hashout)
 	t := &BasicTx{
-		PayloadB:       payload,
-		ProofB:         proof,
-		ChameleonPkB:   pk ,
-		CheckStringB:   [][]byte{r,s},
-		HashValB:       hashout,
+		PayloadB:     payload,
+		ProofB:       proof,
+		ChameleonPkB: pk,
+		CheckStringB: [][]byte{r, s},
+		HashValB:     hashout,
 	}
 	if !t.CheckProof() {
-		return nil,errors.New("Error:invalid proof of transaction!")
+		return nil, errors.New("Error:invalid proof of transaction!")
 	}
 
-	return t,nil
+	return t, nil
 }
 
 func (t *BasicTx) CheckProof() bool {
@@ -197,7 +193,7 @@ func (t *BasicTx) HashVal() []byte {
 }
 
 func (t *BasicTx) Verify(pa interface{}) bool {
-	para,ok := pa.([][]byte)
+	para, ok := pa.([][]byte)
 	if ok && len(para) == 3 {
 	} else {
 		return false
@@ -213,17 +209,17 @@ func (t *BasicTx) Verify(pa interface{}) bool {
 	var hashout []byte
 	ch.ChameleonHash(&pk, &p, &q, &g, &payload, &r, &s, &hashout)
 
-	if bytes.Equal(hashout,t.HashValB) {
+	if bytes.Equal(hashout, t.HashValB) {
 		return t.CheckProof()
 	}
 	return false
 }
 
-func (t *BasicTx) Modify(payld_new interface{},prf_new interface{},private interface{},parameter interface{}) error {
-	para,ok1 := parameter.([][]byte)
-	new,ok2 := payld_new.([]byte)
-	proof_new,ok3 := prf_new.([]byte)
-	sk,ok4 := private.([]byte)
+func (t *BasicTx) Modify(payld_new interface{}, prf_new interface{}, private interface{}, parameter interface{}) error {
+	para, ok1 := parameter.([][]byte)
+	new, ok2 := payld_new.([]byte)
+	proof_new, ok3 := prf_new.([]byte)
+	sk, ok4 := private.([]byte)
 	if ok1 && ok2 && ok3 && ok4 && len(para) == 3 {
 	} else {
 		return errors.New("Invalid parameters,check your input!")
@@ -236,14 +232,14 @@ func (t *BasicTx) Modify(payld_new interface{},prf_new interface{},private inter
 	s1 := t.CheckStringB[1]
 	pk := t.ChameleonPkB
 	old := t.PayloadB
-	var r2,s2 []byte
+	var r2, s2 []byte
 	ch.GenerateCollision(&pk, &sk, &p, &q, &g, &old, &new, &r1, &s1, &r2, &s2)
 	t_new := &BasicTx{
-		PayloadB:       new,
-		ProofB:         proof_new,
-		ChameleonPkB:   pk,
-		CheckStringB:   [][]byte{r2,s2},
-		HashValB:       t.HashValB,
+		PayloadB:     new,
+		ProofB:       proof_new,
+		ChameleonPkB: pk,
+		CheckStringB: [][]byte{r2, s2},
+		HashValB:     t.HashValB,
 	}
 	if !t_new.Verify(para) {
 		return errors.New("Error:something in the new transaction is invalid!Collsion generating failed.")
@@ -252,21 +248,19 @@ func (t *BasicTx) Modify(payld_new interface{},prf_new interface{},private inter
 	return nil
 }
 
-
-
-
 // Example Block Implementation
-type BasicHead struct{
-	Height int       `json:"height"`
-	Timestamp int    `json:"timestamp"`
-	TxCount int      `json:"transactionCount"`
-	HashRoot []byte  `json:"hashRoot"`
-	ChameleonParameter [][]byte   `json:"chameleonParameter"`
+type BasicHead struct {
+	Height             int      `json:"height"`
+	Timestamp          int      `json:"timestamp"`
+	TxCount            int      `json:"transactionCount"`
+	HashRoot           []byte   `json:"hashRoot"`
+	PreviousRoot       []byte   `json:"previous_root"`
+	ChameleonParameter [][]byte `json:"chameleonParameter"`
 }
 
-type BasicBlock struct{
-	HeadB BasicHead     `json:"head"`
-	TransactionsB []Tx  `json:"transactions"`
+type BasicBlock struct {
+	HeadB         BasicHead `json:"head"`
+	TransactionsB []Tx      `json:"transactions"`
 }
 
 func NewBasicBlock(ChameleonParameter [][]byte) *BasicBlock {
@@ -287,13 +281,13 @@ func (b *BasicBlock) Transactions(index int) Tx {
 	return b.TransactionsB[index]
 }
 
-func (b *BasicBlock) GetTxIndexByHash(hash []byte) (bool,int) {
-	for i:=0;i<b.HeadB.TxCount;i++ {
-		if bytes.Equal(b.TransactionsB[i].HashVal(),hash) {
-			return true,i
+func (b *BasicBlock) GetTxIndexByHash(hash []byte) (bool, int) {
+	for i := 0; i < b.HeadB.TxCount; i++ {
+		if bytes.Equal(b.TransactionsB[i].HashVal(), hash) {
+			return true, i
 		}
 	}
-	return false,b.HeadB.TxCount
+	return false, b.HeadB.TxCount
 }
 
 func (b *BasicBlock) TransactionCount() int {
@@ -302,16 +296,16 @@ func (b *BasicBlock) TransactionCount() int {
 
 func (b *BasicBlock) Verify() bool {
 	var tree [][]byte
-	for i:=0;i<b.HeadB.TxCount;i++ {
+	for i := 0; i < b.HeadB.TxCount; i++ {
 		if !b.TransactionsB[i].Verify(b.HeadB.ChameleonParameter) {
 			return false
 		}
 		tree = append(tree, b.TransactionsB[i].HashVal())
 	}
-	for ;len(tree)>1; {
+	for len(tree) > 1 {
 		var tmp [][]byte
-		for i:=1;i<len(tree);i++ {
-			parent := sha256.Sum256(bytes.Join([][]byte{tree[i-1],tree[i]}, []byte("")))
+		for i := 1; i < len(tree); i++ {
+			parent := sha256.Sum256(bytes.Join([][]byte{tree[i-1], tree[i]}, []byte("")))
 			tmp = append(tmp, parent[:])
 		}
 		if len(tree)%2 == 1 {
@@ -319,7 +313,8 @@ func (b *BasicBlock) Verify() bool {
 		}
 		tree = tmp
 	}
-	return bytes.Equal(b.HeadB.HashRoot, tree[0])
+	root := sha256.Sum256(bytes.Join([][]byte{tree[0], b.HeadB.PreviousRoot}, []byte("")))
+	return bytes.Equal(b.HeadB.HashRoot, root[:])
 }
 
 func (b *BasicBlock) AppendTx(t Tx) error {
@@ -331,18 +326,18 @@ func (b *BasicBlock) AppendTx(t Tx) error {
 	return nil
 }
 
-func (b *BasicBlock) Finalize(timestamp int) error {
+func (b *BasicBlock) Finalize(timestamp, height int, prvRoot []byte) error {
 	var tree [][]byte
-	for i:=0;i<b.HeadB.TxCount;i++ {
+	for i := 0; i < b.HeadB.TxCount; i++ {
 		if !b.TransactionsB[i].Verify(b.HeadB.ChameleonParameter) {
-			return errors.New("Verify transaction "+strconv.Itoa(i)+" failed!")
+			return errors.New("Verify transaction " + strconv.Itoa(i) + " failed!")
 		}
 		tree = append(tree, b.TransactionsB[i].HashVal())
 	}
-	for ;len(tree)>1; {
+	for len(tree) > 1 {
 		var tmp [][]byte
-		for i:=1;i<len(tree);i++ {
-			parent := sha256.Sum256(bytes.Join([][]byte{tree[i-1],tree[i]}, []byte("")))
+		for i := 1; i < len(tree); i++ {
+			parent := sha256.Sum256(bytes.Join([][]byte{tree[i-1], tree[i]}, []byte("")))
 			tmp = append(tmp, parent[:])
 		}
 		if len(tree)%2 == 1 {
@@ -350,14 +345,15 @@ func (b *BasicBlock) Finalize(timestamp int) error {
 		}
 		tree = tmp
 	}
-	height,_ := GetCurrentBlockHeight()
-	b.HeadB.Height = height+1
+	b.HeadB.Height = height
 	b.HeadB.Timestamp = timestamp
-	b.HeadB.HashRoot = tree[0]
+	b.HeadB.PreviousRoot = prvRoot
+	root := sha256.Sum256(bytes.Join([][]byte{tree[0], b.HeadB.PreviousRoot}, []byte("")))
+	b.HeadB.HashRoot = root[:]
 	return nil
 }
 
-func (b *BasicBlock) ReplaceTx(t Tx,index int) error {
+func (b *BasicBlock) ReplaceTx(t Tx, index int) error {
 	old := b.Transactions(index)
 	if old == nil {
 		return errors.New("index ovweflow")
@@ -365,12 +361,9 @@ func (b *BasicBlock) ReplaceTx(t Tx,index int) error {
 	if !t.Verify(b.HeadB.ChameleonParameter) {
 		return errors.New("invalid new transaction")
 	}
-	if !bytes.Equal(t.HashVal(),old.HashVal()) {
+	if !bytes.Equal(t.HashVal(), old.HashVal()) {
 		return errors.New("new transaction hash different from old one")
 	}
 	b.TransactionsB[index] = t
 	return nil
 }
-
-
-
