@@ -1,13 +1,13 @@
 package path
 
 import (
+	"fmt"
 	"strconv"
 )
 
 var configPath string = "./storage/config"
 var txPoolPath string = "./storage/pool/"
 var blockPath string = "./storage/block/"
-
 
 func SetConfigPath(_path string) {
 	configPath = _path
@@ -34,9 +34,9 @@ func GetBlockDirPath() string {
 }
 
 func GetBlockPath(h int) string {
-	return blockPath+strconv.Itoa(h)
+	return blockPath + strconv.Itoa(h)
 }
 
 func GetPoolTxPath(hash []byte) string {
-	return txPoolPath+string(hash)
+	return txPoolPath + fmt.Sprintf("%x", hash)
 }

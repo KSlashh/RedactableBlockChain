@@ -103,9 +103,9 @@ func Keygen(bits int, p []byte, q []byte, g []byte, hk *[]byte, tk *[]byte) {
 	pBig := new(big.Int)
 	hkBig := new(big.Int)
 	tkBig := new(big.Int)
-	gBig.SetBytes(g)
-	pBig.SetBytes(p)
-	qBig.SetBytes(q)
+	pBig.SetString(string(p), 16)
+	qBig.SetString(string(q), 16)
+	gBig.SetString(string(g), 16)
 
 	// Choosing hk and tk
 	tkBig, err := rand.Int(rand.Reader, qBig)
@@ -151,7 +151,6 @@ func ChameleonHash(
 	hkBig.SetString(string(*hk), 16)
 	rBig.SetString(string(*r), 16)
 	sBig.SetString(string(*s), 16)
-
 
 	// Generate the hashOut with message || rBig
 	hash := sha256.New()

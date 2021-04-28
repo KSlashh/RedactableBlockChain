@@ -13,16 +13,16 @@ import (
 
 // This command Modifys a transaction.
 type ModifyCommand struct {
-	BlockHeight        int      `json:"block-height"`
-	TxId               int      `json:"tx-id"`
-	NewTx              data.Tx  `json:"new_tx"`
-	ChameleonParameter [][]byte `json:"chameleon_parameter"`
+	BlockHeight        int          `json:"block-height"`
+	TxId               int          `json:"tx-id"`
+	NewTx              data.BasicTx `json:"new_tx"`
+	ChameleonParameter [][]byte     `json:"chameleon_parameter"`
 }
 
 // Creates a new Modify command.
-func NewModifyCommand(block, txId int, newtx data.Tx, para [][]byte) *ModifyCommand {
+func NewModifyCommand(height, txId int, newtx data.BasicTx, para [][]byte) *ModifyCommand {
 	return &ModifyCommand{
-		BlockHeight:        block,
+		BlockHeight:        height,
 		TxId:               txId,
 		NewTx:              newtx,
 		ChameleonParameter: para,
@@ -73,7 +73,7 @@ func (c *ModifyCommand) Apply(server raft.Server) (interface{}, error) {
 	}
 
 	log.Printf(
-		"transaction %s at block /%d/%d has been modified.\n before: payload: %s\n proof: %s\n after: payload: %s\n proof: %s\n",
+		"transaction %x at block /%d/%d has been modified.\n before: payload: %s\n proof: %s\n after: payload: %s\n proof: %s\n",
 		old.HashVal(), c.BlockHeight, c.TxId,
 		old.Payload(), old.Proof(),
 		tx.Payload(), tx.Proof())
@@ -83,18 +83,14 @@ func (c *ModifyCommand) Apply(server raft.Server) (interface{}, error) {
 
 // This command adds a new tx.
 type AddTxCommand struct {
-	Payload            []byte   `json:"payload"`
-	Proof              []byte   `json:"proof"`
-	Hk                 []byte   `json:"hk"`
-	ChameleonParameter [][]byte `json:"chameleon_parameter"`
+	Transaction        data.BasicTx `json:"transaction"`
+	ChameleonParameter [][]byte     `json:"chameleon_parameter"`
 }
 
 // Creates a new tx command.
-func NewAddTxCommand(payload, proof, hk []byte, para [][]byte) *AddTxCommand {
+func NewAddTxCommand(tx data.BasicTx, para [][]byte) *AddTxCommand {
 	return &AddTxCommand{
-		Payload:            payload,
-		Proof:              proof,
-		Hk:                 hk,
+		Transaction:        tx,
 		ChameleonParameter: para,
 	}
 }
@@ -113,14 +109,13 @@ func (c *AddTxCommand) Apply(server raft.Server) (interface{}, error) {
 		return nil, err
 	}
 	if !flag {
-		return nil, errors.New("global chameleon parameter in Modify request diff from local")
+		return nil, errors.New("global chameleon parameter in new Tx request diff from local")
 	}
 
-	tx, err := data.NewBasicTx(c.Payload, c.Proof, c.Hk, para)
-	if err != nil {
-		return nil, err
+	tx := c.Transaction
+	if !tx.Verify(para) {
+		return nil, errors.New("invalid transaction")
 	}
-
 	err = data.Write(tx, path.GetPoolTxPath(tx.HashVal()))
 	if err != nil {
 		return nil, err
@@ -157,7 +152,7 @@ func (c *PackCommand) Apply(server raft.Server) (interface{}, error) {
 		return nil, err
 	}
 	if !flag {
-		return nil, errors.New("global chameleon parameter in Modify request diff from local")
+		return nil, errors.New("global chameleon parameter in pack request diff from local")
 	}
 
 	top, err := data.GetCurrentBlockHeight()
@@ -193,6 +188,7 @@ func (c *PackCommand) Apply(server raft.Server) (interface{}, error) {
 	}
 
 	data.AddCurrentBlockHeight()
+	data.Write(c.BlockContent, path.GetBlockPath(c.BlockContent.HeadB.Height))
 
 	for i := 0; i < c.BlockContent.HeadB.TxCount; i++ {
 		hash := c.BlockContent.TransactionsB[i].HashVal()
@@ -202,7 +198,7 @@ func (c *PackCommand) Apply(server raft.Server) (interface{}, error) {
 		}
 	}
 
-	log.Printf("new block generated. height: %d; timestamp: %d; hashRoot: %s \n ",
+	log.Printf("new block generated. height: %d; timestamp: %d; hashRoot: %x ",
 		c.BlockContent.HeadB.Height, c.BlockContent.HeadB.Timestamp, c.BlockContent.HeadB.HashRoot)
 
 	return nil, nil
