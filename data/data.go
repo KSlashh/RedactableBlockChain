@@ -134,6 +134,12 @@ func AddCurrentBlockHeight() error {
 	return nil
 }
 
+type KeyStorage struct {
+	Name    string `json:"name"`
+	Key     string `json:"key"`
+	Version int    `json:"version"`
+}
+
 // Example Tx Implementation
 type BasicTx struct {
 	PayloadB     []byte   `json:"payload"`
@@ -146,6 +152,12 @@ type BasicTx struct {
 func NewBasicTx(payload []byte, proof []byte, pk []byte, para [][]byte) (*BasicTx, error) {
 	if len(para) != 3 {
 		return nil, errors.New("Invalid parameters,check your input!")
+	}
+
+	k := &KeyStorage{}
+	err := json.Unmarshal(payload, k)
+	if err != nil {
+		return nil, errors.New("fail to unmarshal payload to struct KeyStorage:" + err.Error())
 	}
 
 	p := para[0]
@@ -167,6 +179,33 @@ func NewBasicTx(payload []byte, proof []byte, pk []byte, para [][]byte) (*BasicT
 	}
 
 	return t, nil
+}
+
+func (t *BasicTx) Name() (string, error) {
+	k := &KeyStorage{}
+	err := json.Unmarshal(t.PayloadB, k)
+	if err != nil {
+		return "", errors.New("fail to unmarshal payload to struct KeyStorage:" + err.Error())
+	}
+	return k.Name, nil
+}
+
+func (t *BasicTx) Key() (string, error) {
+	k := &KeyStorage{}
+	err := json.Unmarshal(t.PayloadB, k)
+	if err != nil {
+		return "", errors.New("fail to unmarshal payload to struct KeyStorage:" + err.Error())
+	}
+	return k.Key, nil
+}
+
+func (t *BasicTx) Version() (int, error) {
+	k := &KeyStorage{}
+	err := json.Unmarshal(t.PayloadB, k)
+	if err != nil {
+		return 0, errors.New("fail to unmarshal payload to struct Key:" + err.Error())
+	}
+	return k.Version, nil
 }
 
 func (t *BasicTx) CheckProof() bool {

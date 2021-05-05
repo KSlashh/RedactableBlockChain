@@ -26,9 +26,9 @@ func init() {
 			"0: get current height (args: nil)\n"+
 			"1: get block by height and store it(args: height)\n"+
 			"2: get transaction by index (args: height,transactionId)\n"+
-			"3: get transaction by hash (args: hash,startHeight)\n"+
-			"4: create a new transaction (args: payload,proof,hk)\n"+
-			"5: modify a exisiting transaction (args: height,txId,payload,proof,tk)\n"+
+			"3: get transaction by hash (args: hash,#startHeight)\n"+
+			"4: create a new transaction (args: name,key,chameleonHk)\n"+
+			"5: modify a existing transaction (args: height,txId,newVersion,newName,newKey,chameleonTk)\n"+
 			"6: generate chameleon key pair (args: flag)\n"+
 			"  -- flag is 0 : default key pair\n"+
 			"  -- else : new random key pair\n"+
@@ -94,27 +94,65 @@ func main() {
 			if err != nil {
 				fmt.Println(err)
 			}
-			fmt.Printf("Payload: %s\nProof: %s\nHk: %s\nHash: %x\n",
-				tx.Payload(), tx.Proof(), tx.ChameleonPk(), tx.HashVal())
-		}
-	case 3:
-		{
-			args := flag.Args()
-			if len(args) != 2 {
-				fmt.Printf("need %d args but get %d", 2, len(args))
-				return
-			}
-			hash := args[0]
-			start, err := strconv.Atoi(args[1])
+			name, err := tx.Name()
 			if err != nil {
 				fmt.Println(err)
 				return
 			}
+			key, err := tx.Key()
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			version, err := tx.Version()
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			fmt.Printf("Name: %s\nKey: %s\nVersion: %d\nHk: %s\nHash: %x\n",
+				name, key, version, tx.ChameleonPk(), tx.HashVal())
+		}
+	case 3:
+		{
+			args := flag.Args()
+			if len(args) == 0 {
+				fmt.Printf("need at least one args but get none")
+				return
+			}
+			hash := args[0]
+			var start int
+			var err error
+			if len(args) >= 2 {
+				start, err = strconv.Atoi(args[1])
+				if err != nil {
+					fmt.Println(err)
+					return
+				}
+			} else {
+				start = 0
+			}
 			height, txId, tx, err := raftc.GetTxByHash(host, hash, start)
 			fmt.Printf("height: %d, txId: %d\n", height, txId)
-			fmt.Printf("Payload: %s\nProof: %s\nHk: %s", tx.Payload(), tx.Proof(), tx.ChameleonPk())
+			name, err := tx.Name()
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			key, err := tx.Key()
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			version, err := tx.Version()
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			fmt.Printf("Name: %s\nKey: %s\nVersion: %d\nHk: %s\n",
+				name, key, version, tx.ChameleonPk())
 		}
 	case 4:
+		//  "4: create a new transaction (args: name,key,chameleonHk)\n"+
 		{
 			leader, err := raftc.GetCurrentLeader(host)
 			if err != nil {
@@ -126,10 +164,10 @@ func main() {
 				fmt.Printf("need %d args but get %d", 3, len(args))
 				return
 			}
-			payload := []byte(args[0])
-			proof := []byte(args[1])
+			name := args[0]
+			key := args[1]
 			hk := []byte(args[2])
-			res, err := raftc.SendNewTxReq(leader, payload, proof, hk)
+			res, err := raftc.SendNewTxReq(leader, name, key, []byte(""), hk)
 			if err != nil {
 				fmt.Println(err)
 				return
@@ -137,6 +175,7 @@ func main() {
 			fmt.Println(string(res))
 		}
 	case 5:
+		//	"5: modify a existing transaction (args: height,txId,newVersion,newName,newKey,chameleonTk)\n"+
 		{
 			leader, err := raftc.GetCurrentLeader(host)
 			if err != nil {
@@ -144,8 +183,8 @@ func main() {
 				return
 			}
 			args := flag.Args()
-			if len(args) != 5 {
-				fmt.Printf("need %d args but get %d", 5, len(args))
+			if len(args) != 6 {
+				fmt.Printf("need %d args but get %d", 6, len(args))
 				return
 			}
 			height, err := strconv.Atoi(args[0])
@@ -158,10 +197,15 @@ func main() {
 				fmt.Println(err)
 				return
 			}
-			payload := []byte(args[2])
-			proof := []byte(args[3])
-			tk := []byte(args[4])
-			res, err := raftc.SendModifyReq(leader, payload, proof, tk, height, txId)
+			version, err := strconv.Atoi(args[2])
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			name := args[3]
+			key := args[4]
+			tk := []byte(args[5])
+			res, err := raftc.SendModifyReq(leader, name, key, version, []byte(""), tk, height, txId)
 			if err != nil {
 				fmt.Println(err)
 				return

@@ -3,6 +3,7 @@ package raft
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"github.com/RedactableBlockChain/data"
 	"github.com/RedactableBlockChain/path"
 	"github.com/goraft/raft"
@@ -62,6 +63,18 @@ func (c *ModifyCommand) Apply(server raft.Server) (interface{}, error) {
 		return nil, errors.New("invalid tx transaction")
 	}
 
+	oldVersion, err := old.Version()
+	if err != nil {
+		return nil, err
+	}
+	newVersion, err := tx.Version()
+	if err != nil {
+		return nil, err
+	}
+	if newVersion <= oldVersion {
+		return nil, errors.New(fmt.Sprintf("new tx version must be greater than the old one, want >%d, got %d", oldVersion, newVersion))
+	}
+
 	err = block.ReplaceTx(tx, c.TxId)
 	if err != nil {
 		return nil, err
@@ -116,12 +129,30 @@ func (c *AddTxCommand) Apply(server raft.Server) (interface{}, error) {
 	if !tx.Verify(para) {
 		return nil, errors.New("invalid transaction")
 	}
+	version, err := tx.Version()
+	if err != nil {
+		return nil, err
+	}
+	if version != 1 {
+		return nil, errors.New("version of a new tx must be 1,got " + strconv.Itoa(version))
+	}
+
+	name, err := tx.Name()
+	if err != nil {
+		return nil, err
+	}
+
+	key, err := tx.Key()
+	if err != nil {
+		return nil, err
+	}
+
 	err = data.Write(tx, path.GetPoolTxPath(tx.HashVal()))
 	if err != nil {
 		return nil, err
 	}
 
-	log.Printf("new transaction. payload: %s ;proof: %s ; hk: %s \n", tx.Payload(), tx.Proof(), tx.ChameleonPk())
+	log.Printf("new transaction. name: %s ;key: %s ; hk: %s \n", name, key, tx.ChameleonPk())
 
 	return nil, nil
 }

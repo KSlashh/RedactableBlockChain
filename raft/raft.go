@@ -21,9 +21,9 @@ import (
 	"time"
 )
 
-const(
+const (
 	MIN_BLOCK_TX_NUM = 1
-	MAX_BLOCK_TX_NUM =100
+	MAX_BLOCK_TX_NUM = 100
 )
 
 // The raftd server is a combination of the Raft server and an HTTP
@@ -138,18 +138,19 @@ func (s *Server) ListenAndServe(leader string) error {
 }
 
 func (s *Server) Mint() {
+	flag := 0
 	for {
 		time.Sleep(time.Duration(s.epoch) * time.Millisecond)
 		if s.raftServer.State() == raft.Leader {
-			minTxCount,maxTxCount := MIN_BLOCK_TX_NUM,MAX_BLOCK_TX_NUM
-			para,_,_,err := data.GetGolbalChameleonParameter()
+			minTxCount, maxTxCount := MIN_BLOCK_TX_NUM, MAX_BLOCK_TX_NUM
+			para, _, _, err := data.GetGolbalChameleonParameter()
 			if err != nil {
 				log.Fatal(err)
 				continue
 			}
 			block := data.NewBasicBlock(para)
 			count := 0
-			filepath.Walk(path.GetTxPoolPath(), func (path string, info os.FileInfo, e error) error {
+			filepath.Walk(path.GetTxPoolPath(), func(path string, info os.FileInfo, e error) error {
 				if count > maxTxCount {
 					return nil
 				}
@@ -169,10 +170,14 @@ func (s *Server) Mint() {
 				return nil
 			})
 			if count < minTxCount {
-				log.Println("Skip one block mint:no transaction in pool")
+				if flag == 0 {
+					log.Println("Skip block mint:no transaction in pool")
+					flag += 1
+				}
 				continue
 			}
-			top,err := data.GetCurrentBlockHeight()
+			flag = 0
+			top, err := data.GetCurrentBlockHeight()
 			if err != nil {
 				log.Fatal(err)
 				continue
@@ -188,7 +193,7 @@ func (s *Server) Mint() {
 				log.Fatal(err)
 				continue
 			}
-			_,err = s.raftServer.Do(NewPackCommand(*block))
+			_, err = s.raftServer.Do(NewPackCommand(*block))
 			if err != nil {
 				log.Fatal(err)
 				continue
@@ -234,39 +239,47 @@ func (s *Server) joinHandler(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-
 // Client function
-func SendNewTxReq(host string, payload,proof,hk []byte) (returnData []byte, err error) {
-	para,_,_,err := data.GetGolbalChameleonParameter()
+func SendNewTxReq(host, name, key string, proof, hk []byte) (returnData []byte, err error) {
+	para, _, _, err := data.GetGolbalChameleonParameter()
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
-	tx,err := data.NewBasicTx(payload,proof,hk,para)
+	rawKey := &data.KeyStorage{
+		Name:    name,
+		Key:     key,
+		Version: 1,
+	}
+	payload, err := json.Marshal(rawKey)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
-	content,err := json.Marshal(tx)
+	tx, err := data.NewBasicTx(payload, proof, hk, para)
+	if err != nil {
+		return nil, err
+	}
+	content, err := json.Marshal(tx)
 	_data := bytes.NewReader(content)
-	resp,err := http.Post(host+"/new_transaction","application/json",_data)
+	resp, err := http.Post(host+"/new_transaction", "application/json", _data)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 	defer resp.Body.Close()
-	res,err := ioutil.ReadAll(resp.Body)
+	res, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
-	return res,nil
+	return res, nil
 }
 
-func SendNewBlockReq(host string, minTxCount,maxTxCount int) (returnData []byte, err error) {
-	para,_,_,err := data.GetGolbalChameleonParameter()
+func SendNewBlockReq(host string, minTxCount, maxTxCount int) (returnData []byte, err error) {
+	para, _, _, err := data.GetGolbalChameleonParameter()
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 	block := data.NewBasicBlock(para)
 	count := 0
-	filepath.Walk(path.GetTxPoolPath(), func (path string, info os.FileInfo, e error) error {
+	filepath.Walk(path.GetTxPoolPath(), func(path string, info os.FileInfo, e error) error {
 		if count > maxTxCount {
 			return nil
 		}
@@ -286,165 +299,180 @@ func SendNewBlockReq(host string, minTxCount,maxTxCount int) (returnData []byte,
 		return nil
 	})
 	if count < minTxCount {
-		return nil,errors.New("no enough transactions in pool")
+		return nil, errors.New("no enough transactions in pool")
 	}
-	top,err := data.GetCurrentBlockHeight()
+	top, err := data.GetCurrentBlockHeight()
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 	prvBlock := &data.BasicBlock{}
 	err = data.Load(&prvBlock, path.GetBlockPath(top))
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 	err = block.Finalize(int(time.Now().Unix()), top+1, prvBlock.HeadB.HashRoot)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
-	content,err := json.Marshal(block)
+	content, err := json.Marshal(block)
 	_data := bytes.NewReader(content)
-	resp,err := http.Post(host+"/new_block","application/json",_data)
+	resp, err := http.Post(host+"/new_block", "application/json", _data)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 	defer resp.Body.Close()
-	res,err := ioutil.ReadAll(resp.Body)
+	res, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
-	return res,nil
+	return res, nil
 }
 
-func SendModifyReq(host string, payloadNew, proofNew,tk []byte, height,txId int) (returnData []byte, err error) {
-	para,_,_,err := data.GetGolbalChameleonParameter()
+func SendModifyReq(host, nameNew, keyNew string, versionNew int, proofNew, tk []byte, height, txId int) (returnData []byte, err error) {
+	para, _, _, err := data.GetGolbalChameleonParameter()
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
-	tx,err := GetTxByIndex(host,height,txId)
+	tx, err := GetTxByIndex(host, height, txId)
 	if err != nil {
-		return nil,err
+		return nil, err
+	}
+	rawKey := &data.KeyStorage{
+		Name:    nameNew,
+		Key:     keyNew,
+		Version: versionNew,
+	}
+	payloadNew, err := json.Marshal(rawKey)
+	if err != nil {
+		return nil, err
+	}
+	versionOld, err := tx.Version()
+	if err != nil {
+		return nil, err
+	}
+	if versionNew <= versionOld {
+		return nil, errors.New(fmt.Sprintf("new tx version must be greater than the old one, want >%d, got %d", versionOld, versionNew))
 	}
 	err = tx.Modify(payloadNew, proofNew, tk, para)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
-	content,err := json.Marshal(tx)
+	content, err := json.Marshal(tx)
 	_data := bytes.NewReader(content)
-	resp,err := http.Post(fmt.Sprintf("%s/modify/%d/%d", host, height, txId),"application/json",_data)
+	resp, err := http.Post(fmt.Sprintf("%s/modify/%d/%d", host, height, txId), "application/json", _data)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 	defer resp.Body.Close()
-	res,err := ioutil.ReadAll(resp.Body)
+	res, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
-	return res,nil
+	return res, nil
 }
 
 func GetCurrentHeight(host string) (height int, err error) {
-	resp,err := http.Get(host+"/get_current_height")
+	resp, err := http.Get(host + "/get_current_height")
 	if err != nil {
-		return 0,err
+		return 0, err
 	}
 	defer resp.Body.Close()
-	res,err := ioutil.ReadAll(resp.Body)
+	res, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return 0,err
+		return 0, err
 	}
-	height,err = strconv.Atoi(string((res)))
+	height, err = strconv.Atoi(string((res)))
 	if err != nil {
-		return 0,err
+		return 0, err
 	}
-	return height,nil
+	return height, nil
 }
 
 func GetBlockByHeight(host string, height int) (block *data.BasicBlock, err error) {
-	resp,err := http.Get(host+"/get_block_by_height/"+strconv.Itoa(height))
+	resp, err := http.Get(host + "/get_block_by_height/" + strconv.Itoa(height))
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 	defer resp.Body.Close()
-	res,err := ioutil.ReadAll(resp.Body)
+	res, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 	block = &data.BasicBlock{}
 	err = json.Unmarshal(res, &block)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
-	return block,nil
+	return block, nil
 }
 
-func GetTxByIndex(host string, height,txId int) (tx *data.BasicTx, err error) {
-	resp,err := http.Get(fmt.Sprintf("%s/get_transaction_by_index/%d/%d",host,height,txId))
+func GetTxByIndex(host string, height, txId int) (tx *data.BasicTx, err error) {
+	resp, err := http.Get(fmt.Sprintf("%s/get_transaction_by_index/%d/%d", host, height, txId))
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 	defer resp.Body.Close()
-	res,err := ioutil.ReadAll(resp.Body)
+	res, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 	tx = &data.BasicTx{}
 	err = json.Unmarshal(res, &tx)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
-	return tx,nil
+	return tx, nil
 }
 
-func GetTxByHash(host,hash string, startHeight int) (height,txId int, tx *data.BasicTx, err error) {
-	resp,err := http.Get(fmt.Sprintf("%s/get_transaction_by_hash/%s/%d",host,hash,startHeight))
+func GetTxByHash(host, hash string, startHeight int) (height, txId int, tx *data.BasicTx, err error) {
+	resp, err := http.Get(fmt.Sprintf("%s/get_transaction_by_hash/%s/%d", host, hash, startHeight))
 	if err != nil {
-		return 0,0,nil,err
+		return 0, 0, nil, err
 	}
 	defer resp.Body.Close()
-	res,err := ioutil.ReadAll(resp.Body)
+	res, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return 0,0,nil,err
+		return 0, 0, nil, err
 	}
-	index := strings.Split(string(res),"-")
-	height,err = strconv.Atoi(index[0])
+	index := strings.Split(string(res), "-")
+	height, err = strconv.Atoi(index[0])
 	if err != nil {
-		return height,txId,nil,err
+		return height, txId, nil, err
 	}
-	txId,err = strconv.Atoi(index[1])
+	txId, err = strconv.Atoi(index[1])
 	if err != nil {
-		return height,txId,nil,err
+		return height, txId, nil, err
 	}
-	tx,err = GetTxByIndex(host, height, txId)
+	tx, err = GetTxByIndex(host, height, txId)
 	if err != nil {
-		return height,txId,nil,err
+		return height, txId, nil, err
 	}
-	return height,txId,tx,nil
+	return height, txId, tx, nil
 }
 
 func GetCurrentLeader(host string) (leader string, err error) {
-	resp,err := http.Get(host+"/get_current_leader")
+	resp, err := http.Get(host + "/get_current_leader")
 	if err != nil {
-		return "",err
+		return "", err
 	}
 	defer resp.Body.Close()
-	res,err := ioutil.ReadAll(resp.Body)
+	res, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "",err
+		return "", err
 	}
-	return string(res),nil
+	return string(res), nil
 }
-
 
 // Server handler
 func (s *Server) newTxHandler(w http.ResponseWriter, req *http.Request) {
 	var err error
-	defer func(){
+	defer func() {
 		if err != nil {
 			log.Println(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}()
-	content,err := ioutil.ReadAll(req.Body)
+	content, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		return
 	}
@@ -453,27 +481,27 @@ func (s *Server) newTxHandler(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		return
 	}
-	para,_,_,err := data.GetGolbalChameleonParameter()
+	para, _, _, err := data.GetGolbalChameleonParameter()
 	if err != nil {
 		return
 	}
-	_,err = s.raftServer.Do(NewAddTxCommand(*tx, para))
+	_, err = s.raftServer.Do(NewAddTxCommand(*tx, para))
 	if err != nil {
 		return
 	}
-	h,_ := data.GetCurrentBlockHeight()
-	w.Write([]byte("Success:Trancasion "+fmt.Sprintf("%x",tx.HashVal())+" is waitting for packing.Temporary block height: "+strconv.Itoa(h)))
+	h, _ := data.GetCurrentBlockHeight()
+	w.Write([]byte("Success:Trancasion " + fmt.Sprintf("%x", tx.HashVal()) + " is waitting for packing.Temporary block height: " + strconv.Itoa(h)))
 }
 
 func (s *Server) newBlockHandler(w http.ResponseWriter, req *http.Request) {
 	var err error
-	defer func(){
+	defer func() {
 		if err != nil {
 			log.Println(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}()
-	content,err := ioutil.ReadAll(req.Body)
+	content, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		return
 	}
@@ -482,31 +510,31 @@ func (s *Server) newBlockHandler(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		return
 	}
-	_,err = s.raftServer.Do(NewPackCommand(*block))
+	_, err = s.raftServer.Do(NewPackCommand(*block))
 	if err != nil {
 		return
 	}
-	w.Write([]byte("Success:Block height: "+strconv.Itoa(block.HeadB.Height)))
+	w.Write([]byte("Success:Block height: " + strconv.Itoa(block.HeadB.Height)))
 }
 
 func (s *Server) modifyHandler(w http.ResponseWriter, req *http.Request) {
 	var err error
-	defer func(){
+	defer func() {
 		if err != nil {
 			log.Println(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}()
 	vars := mux.Vars(req)
-	height,err := strconv.Atoi(vars["height"])
+	height, err := strconv.Atoi(vars["height"])
 	if err != nil {
 		return
 	}
-	txId,err := strconv.Atoi(vars["txId"])
+	txId, err := strconv.Atoi(vars["txId"])
 	if err != nil {
 		return
 	}
-	content,err := ioutil.ReadAll(req.Body)
+	content, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		return
 	}
@@ -515,26 +543,26 @@ func (s *Server) modifyHandler(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		return
 	}
-	para,_,_,err := data.GetGolbalChameleonParameter()
+	para, _, _, err := data.GetGolbalChameleonParameter()
 	if err != nil {
 		return
 	}
-	_,err = s.raftServer.Do(NewModifyCommand(height, txId, *tx, para))
+	_, err = s.raftServer.Do(NewModifyCommand(height, txId, *tx, para))
 	if err != nil {
 		return
 	}
-	w.Write([]byte("Success:Trancasion "+fmt.Sprintf("%x",tx.HashValB)+" has been modified"))
+	w.Write([]byte("Success:Transaction " + fmt.Sprintf("%x", tx.HashValB) + " has been modified"))
 }
 
 func (s *Server) getCurrentHeightHandler(w http.ResponseWriter, req *http.Request) {
 	var err error
-	defer func(){
+	defer func() {
 		if err != nil {
 			log.Println(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}()
-	height,err := data.GetCurrentBlockHeight()
+	height, err := data.GetCurrentBlockHeight()
 	if err != nil {
 		return
 	}
@@ -543,14 +571,14 @@ func (s *Server) getCurrentHeightHandler(w http.ResponseWriter, req *http.Reques
 
 func (s *Server) getBlockByHeightHandler(w http.ResponseWriter, req *http.Request) {
 	var err error
-	defer func(){
+	defer func() {
 		if err != nil {
 			log.Println(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}()
 	vars := mux.Vars(req)
-	height,err := strconv.Atoi(vars["height"])
+	height, err := strconv.Atoi(vars["height"])
 	if err != nil {
 		return
 	}
@@ -559,7 +587,7 @@ func (s *Server) getBlockByHeightHandler(w http.ResponseWriter, req *http.Reques
 	if err != nil {
 		return
 	}
-	resp,err := json.Marshal(block)
+	resp, err := json.Marshal(block)
 	if err != nil {
 		return
 	}
@@ -568,18 +596,18 @@ func (s *Server) getBlockByHeightHandler(w http.ResponseWriter, req *http.Reques
 
 func (s *Server) getTxByIndexHandler(w http.ResponseWriter, req *http.Request) {
 	var err error
-	defer func(){
+	defer func() {
 		if err != nil {
 			log.Println(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}()
 	vars := mux.Vars(req)
-	height,err := strconv.Atoi(vars["height"])
+	height, err := strconv.Atoi(vars["height"])
 	if err != nil {
 		return
 	}
-	txId,err := strconv.Atoi(vars["txId"])
+	txId, err := strconv.Atoi(vars["txId"])
 	if err != nil {
 		return
 	}
@@ -593,7 +621,7 @@ func (s *Server) getTxByIndexHandler(w http.ResponseWriter, req *http.Request) {
 		err = errors.New("transaction index overflow")
 		return
 	}
-	resp,err := json.Marshal(tx)
+	resp, err := json.Marshal(tx)
 	if err != nil {
 		return
 	}
@@ -602,7 +630,7 @@ func (s *Server) getTxByIndexHandler(w http.ResponseWriter, req *http.Request) {
 
 func (s *Server) getTxByHashHandler(w http.ResponseWriter, req *http.Request) {
 	var err error
-	defer func(){
+	defer func() {
 		if err != nil {
 			log.Println(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -610,23 +638,23 @@ func (s *Server) getTxByHashHandler(w http.ResponseWriter, req *http.Request) {
 	}()
 	vars := mux.Vars(req)
 	hash := vars["hash"]
-	startHeight,err := strconv.Atoi(vars["startHeight"])
+	startHeight, err := strconv.Atoi(vars["startHeight"])
 	if err != nil {
 		return
 	}
-	currentHeight,err := data.GetCurrentBlockHeight()
+	currentHeight, err := data.GetCurrentBlockHeight()
 	if err != nil {
 		return
 	}
-	for i:=startHeight;i<=currentHeight;i++ {
+	for i := startHeight; i <= currentHeight; i++ {
 		var block = &data.BasicBlock{}
 		err = data.Load(block, path.GetBlockPath(i))
 		if err != nil {
 			return
 		}
-		flag,index := block.GetTxIndexByHash(hash)
+		flag, index := block.GetTxIndexByHash(hash)
 		if flag {
-			resp := strings.Join([]string{strconv.Itoa(i) ,strconv.Itoa(index)},"-")
+			resp := strings.Join([]string{strconv.Itoa(i), strconv.Itoa(index)}, "-")
 			if err != nil {
 				return
 			}
@@ -634,13 +662,13 @@ func (s *Server) getTxByHashHandler(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 	}
-	log.Printf("not found %s",hash)
+	log.Printf("not found %s", hash)
 	http.Error(w, errors.New("transaction not found").Error(), http.StatusNotFound)
 }
 
 func (s *Server) getCurrentLeaderHandler(w http.ResponseWriter, req *http.Request) {
 	var err error
-	defer func(){
+	defer func() {
 		if err != nil {
 			log.Println(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -649,8 +677,7 @@ func (s *Server) getCurrentLeaderHandler(w http.ResponseWriter, req *http.Reques
 	if s.raftServer.State() == raft.Leader {
 		w.Write([]byte(s.connectionString()))
 	} else {
-		log.Printf("leader now:%s\n",s.raftServer.Peers()[s.raftServer.Leader()].ConnectionString)
+		log.Printf("leader now:%s\n", s.raftServer.Peers()[s.raftServer.Leader()].ConnectionString)
 		w.Write([]byte(s.raftServer.Peers()[s.raftServer.Leader()].ConnectionString))
 	}
 }
-
