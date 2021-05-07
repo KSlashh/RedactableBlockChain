@@ -1,4 +1,4 @@
 # RedactableBlockChain
 
-New Version with modular design
+Impelement based one the basic redactable blockchain.
 

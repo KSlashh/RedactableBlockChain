@@ -24,7 +24,7 @@ func init() {
 	flag.IntVar(&function, "func", 0,
 		"Choose one function below:\n"+
 			"0: get current height (args: nil)\n"+
-			"1: get block by height and store it(args: height)\n"+
+			"1: get block by height (args: height)\n"+
 			"2: get transaction by index (args: height,transactionId)\n"+
 			"3: get transaction by hash (args: hash,#startHeight)\n"+
 			"4: create a new transaction (args: name,key,chameleonHk)\n"+
